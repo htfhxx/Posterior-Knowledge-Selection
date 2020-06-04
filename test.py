@@ -15,19 +15,23 @@ def parse_arguments():
     return p.parse_args()
 
 
-def evaluate(model, test_loader):
+def evaluate(model, epoch, test_loader):
     encoder, Kencoder, manager, decoder = [*model]
     encoder.eval(), Kencoder.eval(), manager.eval(), decoder.eval()
     NLLLoss = nn.NLLLoss(reduction='mean', ignore_index=params.PAD)
     total_loss = 0
 
     for step, (src_X, _, src_K, tgt_y) in enumerate(test_loader):
+        if step>100:
+            break
         src_X = src_X.cuda()
         src_K = src_K.cuda()
         tgt_y = tgt_y.cuda()
 
         encoder_outputs, hidden, x = encoder(src_X)
-        encoder_mask = (src_X == 0).unsqueeze(1).byte()
+        #encoder_mask = (src_X == 0).unsqueeze(1).byte()
+        encoder_mask = (src_X == 0)[:, :encoder_outputs.size(0)].unsqueeze(1).bool()
+
         K = Kencoder(src_K)
         k_i = manager(x, None, K)
         n_batch = src_X.size(0)
@@ -47,7 +51,8 @@ def evaluate(model, test_loader):
                            tgt_y.contiguous().view(-1))
         total_loss += loss.item()
     total_loss /= len(test_loader)
-    print("nll_loss=%.4f" % (total_loss))
+    print("epoch: %d , nll_loss=%.6f" % (epoch, total_loss))
+    return total_loss
 
 
 def main():
@@ -63,9 +68,9 @@ def main():
 
     print("loading_data...")
 
-    if os.path.exists("vocab.json"):
+    if os.path.exists("data/vocab.json"):
         vocab = Vocabulary()
-        with open('vocab.json', 'r') as fp:
+        with open('data/vocab.json', 'r') as fp:
             vocab.stoi = json.load(fp)
 
         for key, value in vocab.stoi.items():
@@ -90,12 +95,11 @@ def main():
 
     model = [encoder, Kencoder, manager, decoder]
     print("start evaluating")
-    evaluate(model, test_loader)
+    evaluate(model, 0,  test_loader)
 
 
 if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt as e:
-
         print("[STOP]", e)

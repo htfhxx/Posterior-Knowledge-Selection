@@ -1,23 +1,29 @@
 import random
 import argparse
 import json
+import os
 import torch
 from torch import optim
 import torch.nn as nn
 from torch.nn.utils import clip_grad_norm_
 import params
 from utils import init_model, save_models, \
-    build_vocab, load_data, get_data_loader
+    build_vocab, load_data, get_data_loader, Vocabulary
 from model import Encoder, KnowledgeEncoder, Decoder, Manager
+from test import *
 
+import warnings
+warnings.filterwarnings('ignore')
+
+os.environ['CUDA_ENABLE_DEVICES'] = '0'
 
 def parse_arguments():
     p = argparse.ArgumentParser(description='Hyperparams')
-    p.add_argument('-pre_epoch', type=int, default=5,
+    p.add_argument('-pre_epoch', type=int, default=0,
                    help='number of epochs for pre_train')
     p.add_argument('-n_epoch', type=int, default=15,
                    help='number of epochs for train')
-    p.add_argument('-n_batch', type=int, default=128,
+    p.add_argument('-n_batch', type=int, default=1,
                    help='number of batches for train')
     p.add_argument('-lr', type=float, default=5e-4,
                    help='initial learning rate')
@@ -39,7 +45,10 @@ def pre_train(model, optimizer, train_loader, args):
 
     for epoch in range(args.pre_epoch):
         b_loss = 0
+        print('Start preTraining epoch %d ...'%(epoch))
         for step, (src_X, src_y, src_K, _) in enumerate(train_loader):
+            if step>300:
+                break
             src_X = src_X.cuda()
             src_y = src_y.cuda()
             src_K = src_K.cuda()
@@ -65,23 +74,26 @@ def pre_train(model, optimizer, train_loader, args):
                                                                              b_loss))
                 b_loss = 0
         # save models
-        save_models(model, params.all_restore)
+        save_models(model, params.all_restore,0-epoch-1,b_loss)
 
 
-def train(model, optimizer, train_loader, args):
+def train(model, optimizer, train_loader,valid_loader, args):
     encoder, Kencoder, manager, decoder = [*model]
-    encoder.train(), Kencoder.train(), manager.train(), decoder.train()
     parameters = list(encoder.parameters()) + list(Kencoder.parameters()) + \
                  list(manager.parameters()) + list(decoder.parameters())
     NLLLoss = nn.NLLLoss(reduction='mean', ignore_index=params.PAD)
     KLDLoss = nn.KLDivLoss(reduction='batchmean')
 
     for epoch in range(args.n_epoch):
+        encoder.train(), Kencoder.train(), manager.train(), decoder.train()
         b_loss = 0
         k_loss = 0
         n_loss = 0
         t_loss = 0
+        print('Start training epoch %d ...'%(epoch))
         for step, (src_X, src_y, src_K, tgt_y) in enumerate(train_loader):
+            if step>100:
+                break
             src_X = src_X.cuda()
             src_y = src_y.cuda()
             src_K = src_K.cuda()
@@ -89,7 +101,10 @@ def train(model, optimizer, train_loader, args):
 
             optimizer.zero_grad()
             encoder_outputs, hidden, x = encoder(src_X)
-            encoder_mask = (src_X == 0)[:, :encoder_outputs.size(0)].unsqueeze(1).byte()
+            #Warning: masked_fill_ received a mask with dtype torch.uint8, this behavior is now deprecated,please use a mask with dtype torch.bool instead. (masked_fill__cuda at ..\aten\src\ATen\native\cuda\LegacyDefinitions.cpp:19)
+            #encoder_mask = (src_X == 0)[:, :encoder_outputs.size(0)].unsqueeze(1).byte()
+            encoder_mask = (src_X == 0)[:, :encoder_outputs.size(0)].unsqueeze(1).bool()
+
             y = Kencoder(src_y)
             K = Kencoder(src_K)
             prior, posterior, k_i, k_logits = manager(x, y, K)
@@ -139,8 +154,11 @@ def train(model, optimizer, train_loader, args):
                 n_loss = 0
                 b_loss = 0
                 t_loss = 0
+
+        print('Start evaluateing epoch %d ...' % (epoch))
+        valid_loss =  evaluate(model, epoch, valid_loader)
         # save models
-        save_models(model, params.all_restore)
+        save_models(model, params.all_restore,epoch, valid_loss)
 
 
 def main():
@@ -152,18 +170,33 @@ def main():
     n_batch = args.n_batch
     temperature = params.temperature
     train_path = params.train_path
+    #test_path = params.test_path
+    valid_path = params.valid_path
     assert torch.cuda.is_available()
 
+    # print("building the vocab...")
+    # vocab = build_vocab(train_path, n_vocab)
+    #
+    # # save vocab
+    # print("saving the vocab...")
+    # with open('data/vocab.json', 'w') as fp:
+    #     json.dump(vocab.stoi, fp)
+
+    # load vocab
+    print("loading the vocab...")
+    vocab = Vocabulary()
+    with open('data/vocab.json', 'r') as fp:
+        vocab.stoi = json.load(fp)
+
+    # load data and change to id
     print("loading_data...")
-    vocab = build_vocab(train_path, n_vocab)
-
-    # save vocab
-    with open('vocab.json', 'w') as fp:
-        json.dump(vocab.stoi, fp)
-
     train_X, train_y, train_K = load_data(train_path, vocab)
     train_loader = get_data_loader(train_X, train_y, train_K, n_batch)
-    print("successfully loaded")
+    print("successfully loaded train data")
+    valid_X, valid_y, valid_K = load_data(valid_path, vocab)
+    valid_loader = get_data_loader(train_X, train_y, train_K, n_batch)
+    print("successfully loaded  valid data")
+
 
     encoder = Encoder(n_vocab, n_embed, n_hidden, n_layer, vocab).cuda()
     Kencoder = KnowledgeEncoder(n_vocab, n_embed, n_hidden, n_layer, vocab).cuda()
@@ -176,6 +209,7 @@ def main():
         manager = init_model(manager, restore=params.manager_restore)
         decoder = init_model(decoder, restore=params.decoder_restore)
 
+
     model = [encoder, Kencoder, manager, decoder]
     parameters = list(encoder.parameters()) + list(Kencoder.parameters()) + \
                  list(manager.parameters()) + list(decoder.parameters())
@@ -183,9 +217,9 @@ def main():
 
     # pre_train knowledge manager
     print("start pre-training")
-    pre_train(model, optimizer, train_loader, args)
+    pre_train(model, optimizer, train_loader,args)
     print("start training")
-    train(model, optimizer, train_loader, args)
+    train(model, optimizer, train_loader,valid_loader , args)
 
     # save final model
     save_models(model, params.all_restore)

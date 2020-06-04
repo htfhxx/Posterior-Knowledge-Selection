@@ -15,9 +15,9 @@ def main():
     temperature = params.temperature
     assert torch.cuda.is_available()
 
-    if os.path.exists("vocab.json"):
+    if os.path.exists("data/vocab.json"):
         vocab = Vocabulary()
-        with open('vocab.json', 'r') as fp:
+        with open('data/vocab.json', 'r') as fp:
             vocab.stoi = json.load(fp)
 
         for key, value in vocab.stoi.items():

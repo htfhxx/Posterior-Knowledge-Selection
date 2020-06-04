@@ -14,6 +14,11 @@ class Encoder(nn.Module):
         self.n_embed = n_embed
         self.n_hidden = n_hidden
         self.n_layer = n_layer
+        self.embedding = nn.Embedding(n_vocab, n_embed)
+        self.gru = nn.GRU(input_size=n_embed, hidden_size=n_hidden,
+                          num_layers=n_layer, bidirectional=True)
+        '''
+        AttributeError: 'GloVe' object has no attribute 'stoi' 
         if vocab is None:
             self.embedding = nn.Embedding(n_vocab, n_embed)
         else:
@@ -24,8 +29,8 @@ class Encoder(nn.Module):
                     embedding[vocab.stoi[word]] = vectors[word]
             self.embedding = nn.Embedding.from_pretrained(embedding)
             print("encoder embedding is initialized with Glove")
-        self.gru = nn.GRU(input_size=n_embed, hidden_size=n_hidden,
-                          num_layers=n_layer, bidirectional=True)
+        '''
+
 
     def forward(self, X):
         '''
@@ -58,6 +63,10 @@ class KnowledgeEncoder(nn.Module):
         self.n_embed = n_embed
         self.n_hidden = n_hidden
         self.n_layer = n_layer
+        self.embedding = nn.Embedding(n_vocab, n_embed)
+        self.gru = nn.GRU(input_size=n_embed, hidden_size=n_hidden,
+                          num_layers=n_layer, bidirectional=True)
+        '''
         if vocab is None:
             self.embedding = nn.Embedding(n_vocab, n_embed)
         else:
@@ -68,8 +77,9 @@ class KnowledgeEncoder(nn.Module):
                     embedding[vocab.stoi[word]] = vectors[word]
             self.embedding = nn.Embedding.from_pretrained(embedding)
             print("Kencoder embedding is initialized with Glove")
-        self.gru = nn.GRU(input_size=n_embed, hidden_size=n_hidden,
-                          num_layers=n_layer, bidirectional=True)
+        '''
+
+
 
     def forward(self, K):
         '''
@@ -171,8 +181,11 @@ class Attention(nn.Module):
         # attn_scores: [n_batch, seq_len, n_hidden]
         v = self.v.repeat(encoder_outputs.size(0), 1).unsqueeze(1)  # [n_batch, 1, n_hidden]
         attn_scores = torch.bmm(v, attn_scores.transpose(1, 2))  # [n_batch, 1, seq_len]
+        # print(attn_scores)
+        # print(encoder_mask)
         if encoder_mask is not None:
             attn_scores.masked_fill_(encoder_mask, -1e9)
+            #attn_scores.masked_fill_(encoder_mask, -1e9)
         attn_weights = F.softmax(attn_scores, dim=-1)  # [n_batch, 1, seq_len]
         return attn_weights  # [n_batch, 1, seq_len]
 
@@ -184,6 +197,8 @@ class Decoder(nn.Module):  # Hierarchical Gated Fusion Unit
         self.n_embed = n_embed
         self.n_hidden = n_hidden
         self.n_layer = n_layer
+        self.embedding = nn.Embedding(n_vocab, n_embed)
+        '''
         if vocab is None:
             self.embedding = nn.Embedding(n_vocab, n_embed)
         else:
@@ -194,6 +209,7 @@ class Decoder(nn.Module):  # Hierarchical Gated Fusion Unit
                     embedding[vocab.stoi[word]] = vectors[word]
             self.embedding = nn.Embedding.from_pretrained(embedding)
             print("decoder embedding is initialized with Glove")
+        '''
         self.attention = Attention(n_hidden)
         self.y_weight = nn.Linear(n_hidden, n_hidden)
         self.k_weight = nn.Linear(n_hidden, n_hidden)

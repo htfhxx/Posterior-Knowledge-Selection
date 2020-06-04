@@ -55,13 +55,14 @@ def save_model(net, filename):
     print("save pretrained model to: {}".format(filename))
 
 
-def save_models(model, filenames):
+def save_models(model, filenames, epoch, valid_loss):
     """Save trained model."""
     if not os.path.exists(params.model_root):
         os.makedirs(params.model_root)
     for i in range(len(model)):
         net = model[i]
         filename = filenames[i]
+        filename = filename + '_epoch_%d_%.6f' % (epoch, valid_loss)
         torch.save(net.state_dict(), filename)
         print("save pretrained model to: {}".format(filename))
 

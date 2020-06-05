@@ -67,7 +67,7 @@ def save_models(model, filenames, epoch, valid_loss):
         print("save pretrained model to: {}".format(filename))
 
 
-def build_vocab(path, n_vocab):
+def build_vocab_1(path, n_vocab):
     with open(path, errors="ignore") as file:
         word_counter = Counter()
         vocab = Vocabulary()
@@ -90,6 +90,7 @@ def build_vocab(path, n_vocab):
                 if count == 3:
                     continue
                 k_line = line.split("persona:")[1].strip("\n").lower()
+
                 tokens = nltk.word_tokenize(k_line)
                 count += 1
 
@@ -128,61 +129,89 @@ def build_vocab(path, n_vocab):
     return vocab
 
 
-def load_data(path, vocab):
-    with open(path, errors="ignore") as file:
-        X = []
-        K = []
-        y = []
-        k = []
+def build_vocab_music(path, n_vocab):
+    with open(path, errors="ignore",encoding='utf-8') as file:
+        word_counter = Counter()
+        vocab = Vocabulary()
+        # vocab = dict()
+        # reverse_vocab = dict()
+        vocab.stoi['<PAD>'] = params.PAD
+        vocab.stoi['<UNK>'] = params.UNK
+        vocab.stoi['<SOS>'] = params.SOS
+        vocab.stoi['<EOS>'] = params.EOS
+
+        initial_vocab_size = len(vocab.stoi)
+        vocab_idx = initial_vocab_size
 
         for line in file:
-            dialog_id = line.split()[0]
-            if dialog_id == "1":
-                k = []
+            print(line)
+            print(list(line))
+            break
+            #tokens = list(line)
+            for word in line:
+                if word in vocab.itos:
+                    word_counter[word] += 1
+                else:
+                    word_counter[word] = 1
+        for key, _ in word_counter.most_common(n_vocab - initial_vocab_size):
+            vocab.stoi[key] = vocab_idx
+            vocab_idx += 1
+        for key, value in vocab.stoi.items():
+            vocab.itos.append(key)
 
-            if "your persona:" in line:
-                if len(k) == 3:
-                    continue
-                k_line = line.split("persona:")[1].strip("\n").lower()
-                k.append(k_line)
+    return vocab
 
-            elif "__SILENCE__" not in line:
-                K.append(k)
-                X_line = " ".join(line.split("\t")[0].split()[1:]).lower()
-                y_line = line.split("\t")[1].strip("\n").lower()
-                X.append(X_line)
-                y.append(y_line)
+
+def load_data(path, vocab):
+
+    x_str = []
+    y_str = []
+    k_str = []
+
+    f = open(path, 'r', encoding='utf-8').read()
+    data_list = f.split('\n\n')
+    cnt_exception=0
+    for i in range(len(data_list)):
+        if i>10:
+            break
+        sample_list = data_list[i].split('\n')
+        if len(sample_list) != 3:
+            cnt_exception+=1
+            continue
+        #assert len(sample_list) == 3, sample_list
+        x_str.append(sample_list[0])
+        y_str.append(sample_list[1])
+        assert  len(sample_list[2].strip().split()) ==3
+        k_str.append(sample_list[2].strip().split())
+    print('there is %d exception during loading data.'%(cnt_exception))
 
     X_ind = []
     y_ind = []
     K_ind = []
 
-    for line in X:
+    for line in x_str:
         X_temp = []
-        tokens = nltk.word_tokenize(line)
-        for word in tokens:
+        for word in line:
             if word in vocab.stoi:
                 X_temp.append(vocab.stoi[word])
             else:
                 X_temp.append(vocab.stoi['<UNK>'])
         X_ind.append(X_temp)
 
-    for line in y:
+    for line in y_str:
         y_temp = []
-        tokens = nltk.word_tokenize(line)
-        for word in tokens:
+        for word in line:
             if word in vocab.stoi:
                 y_temp.append(vocab.stoi[word])
             else:
                 y_temp.append(vocab.stoi['<UNK>'])
         y_ind.append(y_temp)
 
-    for lines in K:
+    for keys in k_str:
         K_temp = []
-        for line in lines:
+        for key in keys:
             k_temp = []
-            tokens = nltk.word_tokenize(line)
-            for word in tokens:
+            for word in key:
                 if word in vocab.stoi:
                     k_temp.append(vocab.stoi[word])
                 else:
@@ -193,12 +222,12 @@ def load_data(path, vocab):
     return X_ind, y_ind, K_ind
 
 
-def get_data_loader(X, y, K, n_batch):
+def get_data_loader(X, y, K, n_batch,shuffle):
     dataset = PersonaDataset(X, y, K)
     data_loader = DataLoader(
         dataset=dataset,
         batch_size=n_batch,
-        shuffle=True
+        shuffle=shuffle
     )
     return data_loader
 

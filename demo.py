@@ -80,6 +80,8 @@ def main():
                     X.append(vocab.stoi["<UNK>"])
             X = torch.LongTensor(X).unsqueeze(0).cuda()  # X: [1, x_seq_len]
 
+
+
             encoder_outputs, hidden, x = encoder(X)
             k_i = manager(x, None, K)
             outputs = torch.zeros(max_len, 1, n_vocab).cuda()  # outputs: [max_len, 1, n_vocab]

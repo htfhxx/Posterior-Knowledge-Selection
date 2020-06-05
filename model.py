@@ -5,6 +5,8 @@ import torch.nn.utils.rnn as rnn
 import torch.nn.functional as F
 from torchnlp.word_to_vector import GloVe
 from utils import gumbel_softmax
+import params
+import numpy as np
 
 
 class Encoder(nn.Module):
@@ -17,19 +19,36 @@ class Encoder(nn.Module):
         self.embedding = nn.Embedding(n_vocab, n_embed)
         self.gru = nn.GRU(input_size=n_embed, hidden_size=n_hidden,
                           num_layers=n_layer, bidirectional=True)
-        '''
-        AttributeError: 'GloVe' object has no attribute 'stoi' 
-        if vocab is None:
-            self.embedding = nn.Embedding(n_vocab, n_embed)
-        else:
-            embedding = torch.Tensor(n_vocab, n_embed)
-            vectors = GloVe()
-            for word in vocab.stoi:
-                if word in vectors.stoi:
-                    embedding[vocab.stoi[word]] = vectors[word]
-            self.embedding = nn.Embedding.from_pretrained(embedding)
-            print("encoder embedding is initialized with Glove")
-        '''
+        if vocab is not None:
+            print('Loading embedding file: %s' % params.embedding_path)
+            embeddings = np.random.randn(n_vocab, n_embed) * 0.01
+            pre_trained = 0
+            i = 0
+            # small = open('data/music/addcomments_small_embedding.txt', 'w')
+            # count=0
+
+            # with open('data/music/addcomments_small_embedding.txt', 'w') as small:
+            # cnt=0
+            for line in open(params.embedding_path, 'r', encoding='utf-8').readlines():
+                # count+=1
+                # if count%100000==0:
+                #     print(count)
+                #     print(cnt,'   /// 10000')
+                #     cnt=0
+                sp = line.split()
+                if (len(sp) == n_embed + 1) and sp[0] in set(vocab.stoi):
+                    pre_trained += 1
+                    embeddings[vocab.stoi[sp[0]]] = [float(x) for x in sp[1:]]
+                    # small.write(line)
+                    # cnt+=1
+                else:
+                    i += 1
+                    # print(sp[0])
+            # small.close()
+            print("Number of len(sp)!=301     :", i)
+            print('Pre-trained: %d (%.2f%%)' % (pre_trained, pre_trained * 100.0 / len(vocab.stoi)))
+            self.embedding.weight.data.copy_(torch.FloatTensor(embeddings))
+
 
 
     def forward(self, X):
@@ -66,18 +85,35 @@ class KnowledgeEncoder(nn.Module):
         self.embedding = nn.Embedding(n_vocab, n_embed)
         self.gru = nn.GRU(input_size=n_embed, hidden_size=n_hidden,
                           num_layers=n_layer, bidirectional=True)
-        '''
-        if vocab is None:
-            self.embedding = nn.Embedding(n_vocab, n_embed)
-        else:
-            embedding = torch.Tensor(n_vocab, n_embed)
-            vectors = GloVe()
-            for word in vocab.stoi:
-                if word in vectors.stoi:
-                    embedding[vocab.stoi[word]] = vectors[word]
-            self.embedding = nn.Embedding.from_pretrained(embedding)
-            print("Kencoder embedding is initialized with Glove")
-        '''
+        if vocab is not None:
+            print('Loading embedding file: %s' % params.embedding_path)
+            embeddings = np.random.randn(n_vocab, n_embed) * 0.01
+            pre_trained = 0
+            i = 0
+            # small = open('data/music/addcomments_small_embedding.txt', 'w')
+            # count=0
+
+            # with open('data/music/addcomments_small_embedding.txt', 'w') as small:
+            # cnt=0
+            for line in open(params.embedding_path, 'r', encoding='utf-8').readlines():
+                # count+=1
+                # if count%100000==0:
+                #     print(count)
+                #     print(cnt,'   /// 10000')
+                #     cnt=0
+                sp = line.split()
+                if (len(sp) == n_embed + 1) and sp[0] in set(vocab.stoi):
+                    pre_trained += 1
+                    embeddings[vocab.stoi[sp[0]]] = [float(x) for x in sp[1:]]
+                    # small.write(line)
+                    # cnt+=1
+                else:
+                    i += 1
+                    # print(sp[0])
+            # small.close()
+            print("Number of len(sp)!=301     :", i)
+            print('Pre-trained: %d (%.2f%%)' % (pre_trained, pre_trained * 100.0 / len(vocab.stoi)))
+            self.embedding.weight.data.copy_(torch.FloatTensor(embeddings))
 
 
 
@@ -198,18 +234,37 @@ class Decoder(nn.Module):  # Hierarchical Gated Fusion Unit
         self.n_hidden = n_hidden
         self.n_layer = n_layer
         self.embedding = nn.Embedding(n_vocab, n_embed)
-        '''
-        if vocab is None:
-            self.embedding = nn.Embedding(n_vocab, n_embed)
-        else:
-            embedding = torch.Tensor(n_vocab, n_embed)
-            vectors = GloVe()
-            for word in vocab.stoi:
-                if word in vectors.stoi:
-                    embedding[vocab.stoi[word]] = vectors[word]
-            self.embedding = nn.Embedding.from_pretrained(embedding)
-            print("decoder embedding is initialized with Glove")
-        '''
+
+        if vocab is not None:
+            print('Loading embedding file: %s' % params.embedding_path)
+            embeddings = np.random.randn(n_vocab, n_embed) * 0.01
+            pre_trained = 0
+            i = 0
+            # small = open('data/music/addcomments_small_embedding.txt', 'w')
+            # count=0
+
+            # with open('data/music/addcomments_small_embedding.txt', 'w') as small:
+            # cnt=0
+            for line in open(params.embedding_path, 'r', encoding='utf-8').readlines():
+                # count+=1
+                # if count%100000==0:
+                #     print(count)
+                #     print(cnt,'   /// 10000')
+                #     cnt=0
+                sp = line.split()
+                if (len(sp) == n_embed + 1) and sp[0] in set(vocab.stoi):
+                    pre_trained += 1
+                    embeddings[vocab.stoi[sp[0]]] = [float(x) for x in sp[1:]]
+                    # small.write(line)
+                    # cnt+=1
+                else:
+                    i += 1
+                    # print(sp[0])
+            # small.close()
+            print("Number of len(sp)!=301     :", i)
+            print('Pre-trained: %d (%.2f%%)' % (pre_trained, pre_trained * 100.0 / len(vocab.stoi)))
+            self.embedding.weight.data.copy_(torch.FloatTensor(embeddings))
+
         self.attention = Attention(n_hidden)
         self.y_weight = nn.Linear(n_hidden, n_hidden)
         self.k_weight = nn.Linear(n_hidden, n_hidden)

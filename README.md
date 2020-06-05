@@ -43,3 +43,15 @@ bot(response): i don't like carrots . i throw them away . # reponse can change b
 <br><br>
 ## DataSet
 - I only use "self_original_no_cands" in Persona-chat released by ParlAI
+
+
+
+rm params.py train.py  test.py 
+
+mv ft_local/params.py params.py
+mv ft_local/train.py train.py
+mv ft_local/test.py  test.py 
+
+python3 train.py -pre_epoch 0 -n_batch 8
+
+nohup python3 -u train.py -restore  > myout.file 2>&1 &

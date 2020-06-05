@@ -8,22 +8,28 @@ import torch.nn as nn
 from torch.nn.utils import clip_grad_norm_
 import params
 from utils import init_model, save_models, \
-    build_vocab, load_data, get_data_loader, Vocabulary
+    build_vocab_music, load_data, get_data_loader, Vocabulary
 from model import Encoder, KnowledgeEncoder, Decoder, Manager
-from test import *
+from evaluation import *
+import time
 
 import warnings
 warnings.filterwarnings('ignore')
 
-os.environ['CUDA_ENABLE_DEVICES'] = '0'
+#os.environ['CUDA_ENABLE_DEVICES'] = '0'
+
+#torch.cuda.set_device(0)
+
+torch.backends.cudnn.enabled = False
+torch.backends.cudnn.benchmark = False
 
 def parse_arguments():
     p = argparse.ArgumentParser(description='Hyperparams')
-    p.add_argument('-pre_epoch', type=int, default=0,
+    p.add_argument('-pre_epoch', type=int, default=5,
                    help='number of epochs for pre_train')
-    p.add_argument('-n_epoch', type=int, default=15,
+    p.add_argument('-n_epoch', type=int, default=30,
                    help='number of epochs for train')
-    p.add_argument('-n_batch', type=int, default=1,
+    p.add_argument('-n_batch', type=int, default=8,
                    help='number of batches for train')
     p.add_argument('-lr', type=float, default=5e-4,
                    help='initial learning rate')
@@ -44,11 +50,12 @@ def pre_train(model, optimizer, train_loader, args):
     NLLLoss = nn.NLLLoss(reduction='mean', ignore_index=params.PAD)
 
     for epoch in range(args.pre_epoch):
+        epoch_start_time =time.time()
         b_loss = 0
         print('Start preTraining epoch %d ...'%(epoch))
         for step, (src_X, src_y, src_K, _) in enumerate(train_loader):
-            if step>300:
-                break
+            # if step>300:
+            #     break
             src_X = src_X.cuda()
             src_y = src_y.cuda()
             src_K = src_K.cuda()
@@ -67,11 +74,11 @@ def pre_train(model, optimizer, train_loader, args):
             clip_grad_norm_(parameters, args.grad_clip)
             optimizer.step()
             b_loss += bow_loss.item()
-            if (step + 1) % 50 == 0:
-                b_loss /= 50
-                print("Epoch [%.1d/%.1d] Step [%.4d/%.4d]: bow_loss=%.4f" % (epoch + 1, args.pre_epoch,
+            if (step + 1) % 10 == 0:
+                b_loss /= 10
+                print("Epoch [%.1d/%.1d] Step [%.4d/%.4d]: bow_loss=%.4f, epoch_time:%.2f s" % (epoch + 1, args.pre_epoch,
                                                                              step + 1, len(train_loader),
-                                                                             b_loss))
+                                                                             b_loss,time.time()-epoch_start_time))
                 b_loss = 0
         # save models
         save_models(model, params.all_restore,0-epoch-1,b_loss)
@@ -85,6 +92,7 @@ def train(model, optimizer, train_loader,valid_loader, args):
     KLDLoss = nn.KLDivLoss(reduction='batchmean')
 
     for epoch in range(args.n_epoch):
+        epoch_start_time = time.time()
         encoder.train(), Kencoder.train(), manager.train(), decoder.train()
         b_loss = 0
         k_loss = 0
@@ -92,8 +100,8 @@ def train(model, optimizer, train_loader,valid_loader, args):
         t_loss = 0
         print('Start training epoch %d ...'%(epoch))
         for step, (src_X, src_y, src_K, tgt_y) in enumerate(train_loader):
-            if step>100:
-                break
+            # if step>100:
+            #     break
             src_X = src_X.cuda()
             src_y = src_y.cuda()
             src_K = src_K.cuda()
@@ -141,14 +149,14 @@ def train(model, optimizer, train_loader,valid_loader, args):
             n_loss += nll_loss.item()
             t_loss += loss.item()
 
-            if (step + 1) % 50 == 0:
-                k_loss /= 50
-                n_loss /= 50
-                b_loss /= 50
-                t_loss /= 50
-                print("Epoch [%.2d/%.2d] Step [%.4d/%.4d]: total_loss=%.4f kldiv_loss=%.4f bow_loss=%.4f nll_loss=%.4f"
+            if (step + 1) % 10 == 0:
+                k_loss /= 10
+                n_loss /= 10
+                b_loss /= 10
+                t_loss /= 10
+                print("Epoch [%.2d/%.2d],  Step [%.4d/%.4d], epoch_time:%.2f s: total_loss=%.4f kldiv_loss=%.4f bow_loss=%.4f nll_loss=%.4f"
                       % (epoch + 1, args.n_epoch,
-                         step + 1, len(train_loader),
+                         step + 1, len(train_loader), time.time()-epoch_start_time,
                          t_loss, k_loss, b_loss, n_loss))
                 k_loss = 0
                 n_loss = 0
@@ -156,7 +164,7 @@ def train(model, optimizer, train_loader,valid_loader, args):
                 t_loss = 0
 
         print('Start evaluateing epoch %d ...' % (epoch))
-        valid_loss =  evaluate(model, epoch, valid_loader)
+        valid_loss =  evaluate_loss(model, epoch, valid_loader)
         # save models
         save_models(model, params.all_restore,epoch, valid_loss)
 
@@ -172,29 +180,30 @@ def main():
     train_path = params.train_path
     #test_path = params.test_path
     valid_path = params.valid_path
+    vocab_path =  params.vocab_path
     assert torch.cuda.is_available()
 
     # print("building the vocab...")
-    # vocab = build_vocab(train_path, n_vocab)
-    #
+    # vocab = build_vocab_music(train_path, n_vocab)
+
     # # save vocab
     # print("saving the vocab...")
-    # with open('data/vocab.json', 'w') as fp:
-    #     json.dump(vocab.stoi, fp)
-
+    # with open(vocab_path, 'w',encoding='utf-8') as fp:
+    #     json.dump(vocab.stoi, fp, ensure_ascii=False)
     # load vocab
     print("loading the vocab...")
     vocab = Vocabulary()
-    with open('data/vocab.json', 'r') as fp:
+    with open(vocab_path, 'r',encoding='utf-8') as fp:
         vocab.stoi = json.load(fp)
 
     # load data and change to id
     print("loading_data...")
     train_X, train_y, train_K = load_data(train_path, vocab)
-    train_loader = get_data_loader(train_X, train_y, train_K, n_batch)
+
+    train_loader = get_data_loader(train_X, train_y, train_K, n_batch,True)
     print("successfully loaded train data")
     valid_X, valid_y, valid_K = load_data(valid_path, vocab)
-    valid_loader = get_data_loader(train_X, train_y, train_K, n_batch)
+    valid_loader = get_data_loader(valid_X, valid_y, valid_K, n_batch,False)
     print("successfully loaded  valid data")
 
 
